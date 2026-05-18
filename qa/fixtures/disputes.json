@@ -1,0 +1,61 @@
+[
+  {
+    "dispute_id": "fixture-dispute-0001-0000-0000-000000000001",
+    "buyer_id": "ondc_buyer_001",
+    "seller_id": "ondc_seller_042",
+    "logistics_id": "ondc_lsp_007",
+    "order_id": "order_demo_001",
+    "dispute_type": "DAMAGED_ITEM",
+    "dispute_amount_inr": 499.0,
+    "evidence": [
+      {
+        "type": "text",
+        "content": "Package arrived with torn box. Kurta has a large stain."
+      },
+      {
+        "type": "image_url",
+        "content": "https://placehold.co/400x300?text=Damaged+Package"
+      }
+    ],
+    "created_at": "2024-01-15T10:00:00+00:00",
+    "description": "Logistics scan confirms damage. Seller wrongly rejects. Agent overrules."
+  },
+  {
+    "dispute_id": "fixture-dispute-0002-0000-0000-000000000002",
+    "buyer_id": "ondc_buyer_002",
+    "seller_id": "ondc_seller_015",
+    "logistics_id": "ondc_lsp_003",
+    "order_id": "order_demo_002",
+    "dispute_type": "NOT_DELIVERED",
+    "dispute_amount_inr": 1299.0,
+    "evidence": [
+      {
+        "type": "text",
+        "content": "I never received this package. It shows delivered but I was home."
+      }
+    ],
+    "created_at": "2024-01-15T11:00:00+00:00",
+    "description": "OTP-confirmed delivery. Buyer claim not supported. Agent sides with seller."
+  },
+  {
+    "dispute_id": "fixture-dispute-0003-0000-0000-000000000003",
+    "buyer_id": "ondc_buyer_003",
+    "seller_id": "ondc_seller_088",
+    "logistics_id": "ondc_lsp_011",
+    "order_id": "order_demo_003",
+    "dispute_type": "WRONG_ITEM",
+    "dispute_amount_inr": 799.0,
+    "evidence": [
+      {
+        "type": "text",
+        "content": "Ordered XL, received M. Size tag clearly shows M."
+      },
+      {
+        "type": "image_url",
+        "content": "https://placehold.co/400x300?text=Wrong+Size+Tag"
+      }
+    ],
+    "created_at": "2024-01-15T12:00:00+00:00",
+    "description": "Seller offers partial. Agent negotiates and accepts reasonable settlement."
+  }
+]

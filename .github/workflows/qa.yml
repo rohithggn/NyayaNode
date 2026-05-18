@@ -1,0 +1,126 @@
+name: NyayaNode QA
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  schema-contract-check:
+    name: "Schema Contract Check (BLOCKER)"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r qa/requirements.txt
+
+      - name: Run schema contract tests (deployment blocker)
+        run: |
+          python -m pytest qa/unit/test_schemas.py -v --tb=short
+
+      - name: "❌ BLOCKED — Fix schema contracts before merging"
+        if: failure()
+        run: |
+          echo "Schema contract tests failed."
+          echo "These tests ensure Member 1, 3, and 4 are integrated correctly."
+          echo "Fix shared/schemas.py before merging."
+          exit 1
+
+  unit-tests:
+    name: "Unit Tests"
+    runs-on: ubuntu-latest
+    needs: schema-contract-check
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install QA dependencies
+        run: pip install -r qa/requirements.txt
+
+      - name: Install agent dependencies
+        run: |
+          if [ -f "agents/requirements.txt" ]; then
+            pip install -r agents/requirements.txt
+          fi
+
+      - name: Run all unit tests
+        run: |
+          python -m pytest qa/unit/ -v --tb=short \
+            --cov=agents --cov=shared \
+            --cov-report=xml:coverage.xml \
+            --cov-report=term-missing
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.xml
+
+  integration-tests:
+    name: "Integration Tests (no live services)"
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r qa/requirements.txt
+
+      - name: Run integration tests (skip if backend down)
+        env:
+          BACKEND_URL: "http://localhost:9999"  # unreachable = all skip
+        run: |
+          python -m pytest qa/integration/ -v --tb=short \
+            -m "not slow" \
+            --ignore=qa/integration/test_agent_full_run.py
+          echo "Integration tests ran against stub backend (all skipped is OK in CI)"
+
+  synthetic-data-check:
+    name: "Synthetic Data Sanity Check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r qa/requirements.txt
+
+      - name: Verify scenarios.py exports all 5 scenarios
+        run: |
+          python -c "
+          import sys
+          sys.path.insert(0, '.')
+          from qa.synthetic.scenarios import ALL_SCENARIOS
+          assert len(ALL_SCENARIOS) == 5, f'Expected 5 scenarios, got {len(ALL_SCENARIOS)}'
+          for s in ALL_SCENARIOS:
+              assert 'expected_decision' in s, f'Missing expected_decision in {s[\"name\"]}'
+              assert 'max_budget_inr' in s, f'Missing max_budget_inr in {s[\"name\"]}'
+          print('✅ All 5 scenarios valid')
+          "
+
+      - name: Run dispute generator smoke test
+        run: |
+          python qa/synthetic/dispute_generator.py
+          echo "✅ Dispute generator produces valid output"

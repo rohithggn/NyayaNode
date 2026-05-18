@@ -1,0 +1,43 @@
+{
+  "session_id": "cf_session_demo_001",
+  "dispute_id": "fixture-dispute-0001-0000-0000-000000000001",
+  "budget_inr": 5.0,
+  "total_cost_inr": 3.21,
+  "budget_exhausted": false,
+  "emergency_mode_triggered": false,
+  "escalated_to_human": false,
+  "escalation_reason": null,
+  "model_calls": [
+    {
+      "call_id": "call_001",
+      "model": "llama-3.1-8b-instant",
+      "task_type": "EVIDENCE_PARSING",
+      "prompt_tokens": 245,
+      "completion_tokens": 67,
+      "cost_inr": 0.05,
+      "latency_ms": 312
+    },
+    {
+      "call_id": "call_002",
+      "model": "mixtral-8x7b-32768",
+      "task_type": "NEGOTIATION",
+      "prompt_tokens": 891,
+      "completion_tokens": 234,
+      "cost_inr": 0.43,
+      "latency_ms": 987
+    },
+    {
+      "call_id": "call_003",
+      "model": "llama-3.1-70b-versatile",
+      "task_type": "FINAL_DECISION",
+      "prompt_tokens": 1203,
+      "completion_tokens": 312,
+      "cost_inr": 2.73,
+      "latency_ms": 2341
+    }
+  ],
+  "savings_vs_gpt4o_inr": 7.99,
+  "savings_percent": 71.3,
+  "created_at": "2024-01-15T10:30:00Z",
+  "completed_at": "2024-01-15T10:30:18Z"
+}

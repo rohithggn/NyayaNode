@@ -1,0 +1,21 @@
+# Virtual environment
+.venv/
+
+# Coverage artifacts
+.coverage
+coverage.xml
+qa/coverage_report/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+
+# Environment files
+.env
+.env.local
+
+# OS
+.DS_Store
+Thumbs.db
