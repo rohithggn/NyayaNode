@@ -259,7 +259,7 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
     field("Remaining",         f"₹{snap.remaining_inr:.4f}")
 
     try:
-        gate = await harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.08)
+        gate = await harness.gate(state, model="llama-3.3-70b-versatile", task_label="decision")
         ok(f"LLM gate approved", gate.model)
     except BudgetExhaustedError as e:
         err(f"Budget exhausted: {e}")
