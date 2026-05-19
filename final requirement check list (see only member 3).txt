@@ -1,0 +1,517 @@
+🧑‍💻 MEMBER 3 — Backend & API Engineer
+Role: ONDC Infrastructure Mock Servers + Agent Webhooks
+Deliverable: FastAPI endpoints that wire the entire system together
+
+📋 PASTE THIS ENTIRE BLOCK INTO CLAUDE
+
+You are a senior backend engineer helping me build the API backbone of 
+"NyayaNode" — a decentralized multi-agent dispute arbitration system for 
+India's ONDC (Open Network for Digital Commerce) network. I am Member 3 
+(Backend & API Engineer) in a 6-person team with 15 hours to ship this.
+
+=======================================================================
+MY ROLE IN ONE SENTENCE
+=======================================================================
+I am the central nervous system of NyayaNode. Every external party 
+(buyer apps, seller systems, logistics APIs, the AI agent, and the 
+frontend dashboard) speaks to each other exclusively through my 
+FastAPI server. If my endpoints are wrong, the entire demo collapses.
+
+=======================================================================
+PROJECT CONTEXT
+=======================================================================
+NyayaNode sits on top of India's ONDC network. ONDC is a decentralized 
+protocol — there is no central Amazon. Buyers use their own apps, sellers 
+use their own systems, logistics providers have their own APIs. When a 
+dispute arises, NyayaNode's multi-agent arbitrator steps in as the 
+neutral digital judge.
+
+My server must:
+  1. Accept incoming ONDC dispute webhooks (from buyer/seller apps)
+  2. Mock realistic ONDC buyer, seller, and logistics party APIs
+  3. Trigger and manage the AI arbitration agent (Member 1's code)
+  4. Stream real-time status updates to the frontend (Member 4)
+  5. Persist all dispute state to Supabase
+  6. Expose audit trail endpoints for the dashboard
+
+Full Tech Stack:
+  - Backend: FastAPI (Python 3.11) + Uvicorn
+  - Database: Supabase (PostgreSQL via supabase-py)
+  - Auth: API key based (simple, no OAuth for hackathon)
+  - Agent: Member 1's arbitrator.py (imported directly)
+  - Cost Layer: Member 2's router.py (imported directly)
+  - Frontend: Member 4's Next.js app calls my REST + SSE endpoints
+  - Deployment: Railway (backend) + Vercel (frontend)
+
+=======================================================================
+MONOREPO CONTEXT (my territory)
+=======================================================================
+nyayanode/
+├── backend/                        ← I OWN THIS ENTIRELY
+│   ├── main.py                     ← FastAPI app entry point
+│   ├── routers/
+│   │   ├── disputes.py             ← Core dispute CRUD + lifecycle
+│   │   ├── ondc_webhook.py         ← Receives ONDC protocol events
+│   │   ├── agent_bridge.py         ← Triggers + monitors agent runs
+│   │   ├── mock_parties.py         ← Fake buyer/seller/logistics APIs
+│   │   └── audit.py                ← Audit trail + cascadeflow log
+│   ├── services/
+│   │   ├── dispute_service.py      ← Business logic layer
+│   │   ├── supabase_client.py      ← DB wrapper
+│   │   ├── agent_runner.py         ← Calls Member 1's agent async
+│   │   └── sse_manager.py          ← Server-Sent Events broadcaster
+│   ├── models/
+│   │   └── db_models.py            ← SQLAlchemy / Supabase table defs
+│   ├── middleware/
+│   │   └── ondc_signature.py       ← ONDC request signing (mock)
+│   ├── tests/
+│   │   ├── test_disputes.py
+│   │   └── test_mock_parties.py
+│   ├── Dockerfile                  ← For Railway deployment
+│   ├── railway.toml                ← Railway config
+│   └── requirements.txt
+├── shared/
+│   ├── schemas.py                  ← I IMPORT from here, never modify
+│   └── constants.py                ← I IMPORT from here, never modify
+└── agents/                         ← I import agent_runner from here
+
+=======================================================================
+MY TASKS IN ORDER
+=======================================================================
+
+TASK 1: Project setup + main.py + Supabase client + DB schema
+        (Create the FastAPI app, connect to Supabase, define all tables)
+
+TASK 2: Build disputes.py router
+        (Full CRUD for disputes + status lifecycle management)
+
+TASK 3: Build mock_parties.py router
+        (Realistic fake ONDC buyer, seller, logistics provider APIs)
+
+TASK 4: Build ondc_webhook.py router
+        (Receives ONDC-protocol-style dispute events, validates, routes)
+
+TASK 5: Build agent_bridge.py + agent_runner.py service
+        (Async trigger of Member 1's arbitrator + status polling)
+
+TASK 6: Build sse_manager.py + SSE streaming endpoint
+        (Real-time dispute status stream for Member 4's dashboard)
+
+TASK 7: Build audit.py router
+        (Serves cascadeflow_audit.json + full audit trail per dispute)
+
+TASK 8: Dockerfile + railway.toml + CORS config for Vercel frontend
+        (Production deployment configuration)
+
+=======================================================================
+EXECUTION RULES
+=======================================================================
+- Give me ONE TASK at a time. Do not proceed until I say "APPROVED".
+- For every task give me:
+    [A] Complete, production-quality code (zero placeholders)
+    [B] Exact terminal commands to install + run
+    [C] How to test it (curl commands or Python test snippets)
+    [D] A VERIFICATION PROMPT for a separate Claude chat QA check
+- All endpoints must be async
+- All responses follow the shared/schemas.py contracts
+- Every endpoint must have OpenAPI docstrings (FastAPI auto-generates 
+  Swagger UI — the judges will see this)
+- Use python-dotenv for all secrets
+- Supabase calls must use the async supabase-py client
+- All errors return RFC 7807 Problem Detail format:
+  {"type": "...", "title": "...", "status": 400, "detail": "..."}
+
+=======================================================================
+SUPABASE DATABASE SCHEMA (create exactly these tables)
+=======================================================================
+
+TABLE: disputes
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  created_at            TIMESTAMPTZ DEFAULT NOW()
+  updated_at            TIMESTAMPTZ DEFAULT NOW()
+  buyer_id              TEXT NOT NULL
+  seller_id             TEXT NOT NULL
+  logistics_id          TEXT NOT NULL
+  order_id              TEXT NOT NULL
+  dispute_type          TEXT NOT NULL  -- enum: DAMAGED_ITEM, WRONG_ITEM, 
+                                       --   NOT_DELIVERED, REFUND_DENIED
+  status                TEXT NOT NULL DEFAULT 'PENDING'
+                                       -- PENDING, EVIDENCE_COLLECTION,
+                                       -- NEGOTIATION, RESOLVED, ESCALATED
+  decision              TEXT           -- FULL_REFUND, PARTIAL_REFUND,
+                                       --   REJECTED, PENDING
+  dispute_amount_inr    NUMERIC(10,2) NOT NULL
+  refund_amount_inr     NUMERIC(10,2)
+  reasoning             TEXT
+  confidence_score      NUMERIC(4,3)
+  hindsight_session_id  TEXT
+  total_cost_inr        NUMERIC(8,4)
+  budget_inr            NUMERIC(8,2) DEFAULT 5.00
+  escalated_to_human    BOOLEAN DEFAULT FALSE
+  agent_run_id          UUID
+
+TABLE: evidence
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  dispute_id        UUID REFERENCES disputes(id)
+  submitted_by      TEXT NOT NULL  -- 'buyer' | 'seller' | 'logistics'
+  evidence_type     TEXT NOT NULL  -- 'image_url' | 'text' | 'tracking_data'
+  content           TEXT NOT NULL
+  submitted_at      TIMESTAMPTZ DEFAULT NOW()
+
+TABLE: audit_events
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  dispute_id        UUID REFERENCES disputes(id)
+  event_type        TEXT NOT NULL
+  actor             TEXT NOT NULL  -- 'agent' | 'buyer' | 'seller' | 
+                                   --   'logistics' | 'system'
+  payload           JSONB
+  timestamp         TIMESTAMPTZ DEFAULT NOW()
+
+TABLE: agent_runs
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid()
+  dispute_id        UUID REFERENCES disputes(id)
+  started_at        TIMESTAMPTZ DEFAULT NOW()
+  completed_at      TIMESTAMPTZ
+  status            TEXT DEFAULT 'RUNNING'
+  cascadeflow_audit JSONB  -- stores full cascadeflow_audit.json here too
+
+=======================================================================
+FULL API CONTRACT (all endpoints I must build)
+=======================================================================
+
+── DISPUTE LIFECYCLE ──────────────────────────────────────────────────
+
+POST   /api/v1/disputes
+  Body: DisputeRequest (from shared/schemas.py)
+  Response: DisputeResponse + 201
+  Action: Create dispute in DB, trigger agent async, return immediately
+
+GET    /api/v1/disputes/{dispute_id}
+  Response: Full dispute object with current status
+
+GET    /api/v1/disputes
+  Query: ?status=PENDING&limit=20&offset=0
+  Response: Paginated list of disputes
+
+PATCH  /api/v1/disputes/{dispute_id}/status
+  Body: {"status": "ESCALATED", "reason": "..."}
+  Response: Updated dispute
+
+── AGENT BRIDGE ───────────────────────────────────────────────────────
+
+POST   /api/v1/disputes/{dispute_id}/arbitrate
+  Action: (Re)trigger agent run for a dispute
+  Response: {"agent_run_id": "uuid", "status": "STARTED"}
+
+GET    /api/v1/disputes/{dispute_id}/agent-status
+  Response: {
+    "run_id": "uuid",
+    "status": "RUNNING|COMPLETE|FAILED",
+    "current_stage": "EVIDENCE_COLLECTION|NEGOTIATION|DECISION",
+    "stages_completed": ["EVIDENCE_COLLECTION"],
+    "elapsed_seconds": 12
+  }
+
+── REAL-TIME STREAMING ────────────────────────────────────────────────
+
+GET    /api/v1/disputes/{dispute_id}/stream
+  Protocol: Server-Sent Events (text/event-stream)
+  Events emitted:
+    event: status_update
+    data: {"status": "NEGOTIATION", "message": "Agent contacting seller..."}
+
+    event: cost_update
+    data: {"total_cost_inr": 1.24, "budget_remaining_inr": 3.76}
+
+    event: decision
+    data: {"decision": "FULL_REFUND", "refund_amount_inr": 500.0}
+
+    event: complete
+    data: {"dispute_id": "...", "final_status": "RESOLVED"}
+
+── AUDIT ──────────────────────────────────────────────────────────────
+
+GET    /api/v1/disputes/{dispute_id}/audit-trail
+  Response: List of all audit_events ordered by timestamp
+
+GET    /api/v1/disputes/{dispute_id}/cascadeflow-audit
+  Response: Full cascadeflow_audit.json content for this dispute
+
+── MOCK ONDC PARTY APIs ───────────────────────────────────────────────
+
+GET    /mock/ondc/logistics/{tracking_id}
+  Response: Realistic ONDC logistics tracking response:
+  {
+    "tracking_id": "TRK001234",
+    "order_id": "order_xyz",
+    "lsp_id": "ondc_lsp_007",
+    "current_status": "DELIVERED" | "IN_TRANSIT" | "LOST" | "DAMAGED",
+    "delivery_timestamp": "2025-01-14T14:30:00Z",
+    "delivery_confirmed_by": "OTP" | "PHOTO" | "SIGNATURE" | null,
+    "last_scan_location": "Koramangala Hub, Bangalore",
+    "scan_history": [
+      {"status": "PICKED_UP", "timestamp": "...", "location": "..."},
+      {"status": "IN_TRANSIT", "timestamp": "...", "location": "..."},
+      {"status": "OUT_FOR_DELIVERY", "timestamp": "...", "location": "..."},
+      {"status": "DELIVERED", "timestamp": "...", "location": "..."}
+    ],
+    "package_condition_flag": "INTACT" | "TAMPERED" | "DAMAGED"
+  }
+
+GET    /mock/ondc/seller/{seller_id}/order/{order_id}
+  Response: {
+    "order_id": "order_xyz",
+    "seller_id": "ondc_seller_042",
+    "item_name": "Cotton Kurta - Blue XL",
+    "item_value_inr": 499.00,
+    "packed_at": "2025-01-13T09:00:00Z",
+    "packaging_type": "STANDARD_POLY_BAG",
+    "fragile_flagged": false,
+    "seller_dispute_stance": "REJECT_REFUND" | "ACCEPT_REFUND" | 
+                             "PARTIAL_REFUND" | "PENDING_REVIEW",
+    "seller_counter_offer_inr": null
+  }
+
+GET    /mock/ondc/buyer/{buyer_id}
+  Response: {
+    "buyer_id": "ondc_buyer_001",
+    "name": "Priya Sharma",
+    "dispute_history_count": 2,
+    "account_age_days": 387,
+    "verified_kyc": true
+  }
+
+POST   /mock/ondc/webhook/dispute-raised
+  Body: Raw ONDC grievance protocol payload
+  Action: Validates ONDC signature, creates dispute, triggers agent
+  Response: {"ack": {"status": "ACK"}}  ← ONDC protocol standard
+
+── HEALTH & ADMIN ─────────────────────────────────────────────────────
+
+GET    /health
+  Response: {
+    "status": "healthy",
+    "supabase": "connected",
+    "agent_module": "loaded",
+    "version": "1.0.0"
+  }
+
+GET    /api/v1/stats
+  Response: {
+    "total_disputes": 42,
+    "resolved_today": 12,
+    "avg_cost_inr": 2.87,
+    "avg_resolution_time_seconds": 14,
+    "escalated_count": 3
+  }
+
+=======================================================================
+MOCK DATA TO SEED (create a seed script with these exact disputes)
+=======================================================================
+Create seed_data.py with 5 realistic disputes:
+
+1. dispute_type: DAMAGED_ITEM, amount: ₹499, 
+   logistics status: DELIVERED+DAMAGED flag
+   expected outcome: FULL_REFUND
+
+2. dispute_type: NOT_DELIVERED, amount: ₹1299,
+   logistics status: DELIVERED+OTP confirmed
+   expected outcome: REJECTED (buyer error)
+
+3. dispute_type: WRONG_ITEM, amount: ₹799,
+   seller stance: PARTIAL_REFUND offer ₹400
+   expected outcome: PARTIAL_REFUND (negotiated)
+
+4. dispute_type: REFUND_DENIED, amount: ₹249,
+   item returned, seller not processing
+   expected outcome: FULL_REFUND
+
+5. dispute_type: DAMAGED_ITEM, amount: ₹8999 (expensive),
+   ambiguous evidence, no logistics damage flag
+   expected outcome: ESCALATED (human review)
+
+=======================================================================
+ONDC WEBHOOK SIGNATURE (mock implementation)
+=======================================================================
+Real ONDC uses ED25519 signatures. For the hackathon, mock it:
+
+  def verify_ondc_signature(request_body: bytes, signature: str) -> bool:
+      # Mock: accept any request with header X-ONDC-Signature present
+      # In production: verify ED25519 against ONDC registry public key
+      return signature is not None and len(signature) > 0
+
+Always log a warning when mock verification is used.
+
+=======================================================================
+DEPLOYMENT CONFIG (Railway)
+=======================================================================
+Dockerfile must:
+  - Use python:3.11-slim base
+  - Install dependencies from requirements.txt
+  - Run: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+  - Health check: GET /health
+
+railway.toml must set:
+  [build]
+  builder = "DOCKERFILE"
+  
+  [deploy]
+  startCommand = "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+  healthcheckPath = "/health"
+  restartPolicyType = "ON_FAILURE"
+
+CORS must allow:
+  - https://*.vercel.app (Member 4's frontend)
+  - http://localhost:3000 (local dev)
+  - http://localhost:3001 (local dev alt)
+
+=======================================================================
+ENVIRONMENT VARIABLES I NEED
+=======================================================================
+Add these to .env.example (Member 1 created this file):
+  SUPABASE_URL=https://xxx.supabase.co
+  SUPABASE_ANON_KEY=your-anon-key
+  SUPABASE_SERVICE_KEY=your-service-key
+  BACKEND_API_KEY=nyayanode-internal-secret-key
+  FRONTEND_URL=https://nyayanode.vercel.app
+  AGENT_MODULE_PATH=agents.core.arbitrator
+  PORT=8000
+
+=======================================================================
+BEGIN NOW
+=======================================================================
+Before writing code, confirm:
+1. You understand the full backend architecture and my role
+2. Which code editor is optimal for FastAPI backend work (with exact 
+   extensions)
+3. How do I structure my imports so Member 1's agent code and Member 2's 
+   router are callable without circular imports?
+4. How do I run my FastAPI server locally while Member 1 and Member 2 
+   are still building their modules? (mock/stub strategy)
+
+Then begin TASK 1: Project setup + main.py + Supabase client + 
+DB schema SQL migration file.
+
+🔍 VERIFICATION PROMPT (paste into a separate Claude chat after each task)
+I am QA-checking Member 3's backend code for the NyayaNode hackathon.
+Audit the code below and return [PASS] or [FAIL] + severity 
+(BLOCKER / WARNING / INFO) for every check:
+
+TASK 1 — Setup checks:
+1. Does main.py include CORS middleware allowing *.vercel.app AND 
+   localhost:3000?
+2. Does main.py include all 5 routers registered with correct prefixes?
+3. Does supabase_client.py use the async supabase-py client?
+4. Does the DB migration SQL create all 4 tables exactly as specified: 
+   disputes, evidence, audit_events, agent_runs?
+5. Does /health endpoint check and report Supabase connectivity?
+6. Does main.py have a lifespan handler (not deprecated @app.on_event)?
+
+TASK 2 — disputes.py checks:
+1. Does POST /disputes return 201 and trigger agent asynchronously 
+   (not blocking the HTTP response)?
+2. Does GET /disputes support pagination (?limit, ?offset, ?status)?
+3. Are all dispute status transitions validated 
+   (PENDING → EVIDENCE_COLLECTION → NEGOTIATION → RESOLVED)?
+4. Do all error responses use RFC 7807 Problem Detail format?
+
+TASK 3 — mock_parties.py checks:
+1. Does GET /mock/ondc/logistics/{id} return all fields including 
+   scan_history array and package_condition_flag?
+2. Does seller response include seller_dispute_stance enum?
+3. Are responses randomized realistically or deterministic per ID?
+   (Deterministic is better — same ID always returns same scenario)
+
+TASK 4 — ondc_webhook.py checks:
+1. Does POST /mock/ondc/webhook/dispute-raised return {"ack": {"status": "ACK"}}?
+2. Is signature verification present even if mocked?
+3. Is a warning logged when mock verification is used?
+
+TASK 5 — agent_bridge.py checks:
+1. Is the agent triggered in a background task (not blocking)?
+2. Does it write agent_run_id back to the disputes table?
+3. Does GET /agent-status return current_stage correctly?
+
+TASK 6 — SSE checks:
+1. Does the stream endpoint set Content-Type: text/event-stream?
+2. Does it emit all 4 event types: status_update, cost_update, 
+   decision, complete?
+3. Does it handle client disconnection gracefully?
+
+TASK 7 — audit.py checks:
+1. Does GET /cascadeflow-audit return the exact JSON schema from 
+   Member 2's contract?
+2. Are audit events returned in chronological order?
+
+TASK 8 — Deployment checks:
+1. Does Dockerfile use python:3.11-slim?
+2. Does it use $PORT env variable (Railway requirement)?
+3. Does railway.toml set healthcheckPath to /health?
+
+Paste code below:
+[PASTE CODE]
+
+⚡ EDITOR RECOMMENDATION FOR MEMBER 3
+Use: Cursor with a FastAPI-specific setup
+Add this to .cursorrules for your role:
+I am building the FastAPI backend for NyayaNode.
+- Never modify shared/schemas.py — only import from it
+- All endpoints are async — no synchronous DB calls ever
+- Agent is always triggered as a BackgroundTask — never block HTTP
+- SSE streams must handle client disconnect (asyncio.CancelledError)
+- All monetary values in DB stored as NUMERIC — never FLOAT
+- ONDC mock APIs must be deterministic (same input → same output)
+- Every endpoint must have a FastAPI docstring for Swagger UI
+- Error format is always RFC 7807 Problem Detail
+- Railway needs $PORT env var — never hardcode port 8000
+Extensions to install in Cursor:
+
+Python + Pylance
+Ruff (linter)
+REST Client (test endpoints without Postman)
+SQLTools + SQLTools PostgreSQL (query Supabase directly)
+Thunder Client (alternative REST tester with collections)
+Docker (for Dockerfile syntax highlighting)
+
+How to run without Member 1's agent ready yet:
+bash# Create a stub in backend/services/agent_runner.py
+# that returns a fake resolved dispute after 5 seconds
+# This lets you build and test ALL your endpoints independently
+
+async def run_agent_stub(dispute_id: str) -> dict:
+    await asyncio.sleep(5)  # simulate agent thinking
+    return {
+        "status": "RESOLVED",
+        "decision": "FULL_REFUND",
+        "refund_amount_inr": 499.0,
+        "reasoning": "STUB: logistics confirmed damage",
+        "confidence_score": 0.95,
+        "total_inference_cost_inr": 2.84
+    }
+
+# Replace with real import when Member 1 pushes their code:
+# from agents.core.arbitrator import ArbitratorAgent
+Local dev commands:
+bashcd backend
+pip install -r requirements.txt
+uvicorn main:app --reload --port 8000
+
+# Test the full flow:
+curl -X POST http://localhost:8000/api/v1/disputes \
+  -H "Content-Type: application/json" \
+  -d '{
+    "buyer_id": "ondc_buyer_001",
+    "seller_id": "ondc_seller_042",
+    "logistics_id": "ondc_lsp_007",
+    "order_id": "order_xyz",
+    "dispute_type": "DAMAGED_ITEM",
+    "evidence": [{"type": "text", "content": "Box arrived crushed"}],
+    "dispute_amount_inr": 499.0
+  }'
+
+# Open Swagger UI to show judges:
+open http://localhost:8000/docs
+
+
+✅ Member 3 says "APPROVED" after each task verification → Claude moves to next task.
+Say "proceed to Member 4" when you want the next person's prompt.
