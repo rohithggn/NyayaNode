@@ -358,7 +358,7 @@ class TestBudgetHarness:
         state = make_state(make_request())
         result = await harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.06)
         assert result.approved is True
-        assert result.model == "llama-3.3-70b-versatile"
+        assert result.model_to_use == "llama-3.3-70b-versatile"
 
     @pytest.mark.asyncio
     async def test_charge_tracks_correctly(self):
@@ -374,7 +374,7 @@ class TestBudgetHarness:
         # Consume 72% of budget
         await harness.charge(state, actual_cost=3.60, node="evidence_node")
         result = await harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.10)
-        assert result.model == "llama-3.1-8b-instant", f"Expected downgrade, got {result.model}"
+        assert result.model_to_use == "llama-3.1-8b-instant", f"Expected downgrade, got {result.model_to_use}"
 
     @pytest.mark.asyncio
     async def test_hard_block_when_exhausted(self):

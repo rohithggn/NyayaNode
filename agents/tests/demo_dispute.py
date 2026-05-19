@@ -260,7 +260,7 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
 
     try:
         gate = await harness.gate(state, model="llama-3.3-70b-versatile", task_label="decision")
-        ok(f"LLM gate approved", gate.model)
+        ok(f"LLM gate approved", gate.model_to_use)
     except BudgetExhaustedError as e:
         err(f"Budget exhausted: {e}")
         sm.force_escalate("Budget exhausted before decision")
@@ -326,7 +326,7 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
         "confidence_score":       round(confidence, 2),
         "primary_fault":          lg["verdict"],
         "negotiation_outcome":    ng["outcome"],
-        "total_inference_cost_inr": round(harness.snapshot(state).consumed_inr, 4),
+        "total_inference_cost_inr": round((await harness.snapshot(state)).consumed_inr, 4),
         "resolved_at":            datetime.now(timezone.utc).isoformat(),
         "reasoning": (
             f"Evidence analysis returned {ev['strength']} strength "
