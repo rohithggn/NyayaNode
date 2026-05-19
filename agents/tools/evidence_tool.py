@@ -182,18 +182,19 @@ class _MockEvidenceClient:
         items = []
         for e in evidence_items:
             if isinstance(e, dict):
-                items.append(EvidenceItem(
-                    type=e.get("type", "text"),
-                    content=e.get("content", ""),
-                    metadata={
-                        "relevance_score": round(random.uniform(0.5, 1.0), 2),
-                        "analyzed": True
-                    }
-                ))
+                t = e.get("type", "text")
+                c = e.get("content", "")
             else:
-                e.metadata["relevance_score"] = round(random.uniform(0.5, 1.0), 2)
-                e.metadata["analyzed"] = True
-                items.append(e)
+                # Handle shared.schemas.EvidenceItem pydantic model
+                t = e.type.value if hasattr(e.type, "value") else str(e.type)
+                c = e.content
+            
+            items.append(EvidenceItem(
+                type=t,
+                content=c,
+                relevance_score=round(random.uniform(0.5, 1.0), 2),
+                analyzed=True,
+            ))
 
         # If no evidence submitted → weak
         if not items:
