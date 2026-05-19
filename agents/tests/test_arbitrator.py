@@ -47,7 +47,7 @@ from shared.schemas import (
 
 # ── Memory / rollback (Task 4) ────────────────────────────────────────────────
 from agents.hindsight.memory_bank import MemoryBank
-from agents.hindsight.rollback    import RollbackEngine
+from agents.hindsight.rollback    import RollbackEngine, auto_rollback
 
 # ── Budget harness (Task 5) ───────────────────────────────────────────────────
 from agents.cascadeflow.budget_harness import BudgetHarness, BudgetExhaustedError
@@ -295,13 +295,12 @@ class TestMemoryAndRollback:
     async def test_checkpoint_and_retrieve(self):
         bank = MemoryBank()
         state = make_state(make_request())
-        session_id = state.hindsight_session_id
-
-        await bank.open_session(session_id, state)
+        session = await bank.open(state.dispute_id)
+        state.hindsight_session_id = session.session_id
         state.confidence_score = 0.82
-        await bank.checkpoint(session_id, state, "evidence")
+        await bank.checkpoint(session, state, "evidence")
 
-        retrieved = await bank.get_latest(session_id)
+        retrieved = session.latest_checkpoint
         assert retrieved is not None
         assert retrieved.confidence_score == 0.82
 
@@ -310,16 +309,15 @@ class TestMemoryAndRollback:
         bank = MemoryBank()
         engine = RollbackEngine(bank)
         state = make_state(make_request())
-        sid = state.hindsight_session_id
-
-        await bank.open_session(sid, state)
+        session = await bank.open(state.dispute_id)
+        state.hindsight_session_id = session.session_id
         state.confidence_score = 0.75
-        await bank.checkpoint(sid, state, "evidence")
+        await bank.checkpoint(session, state, "evidence")
         state.confidence_score = 0.30   # Something went wrong
-        await bank.checkpoint(sid, state, "negotiation")
+        await bank.checkpoint(session, state, "negotiation")
 
-        result = await engine.auto_rollback(sid, state)
-        assert result.reentry_node == "evidence"
+        result = await auto_rollback(state, bank, "test")
+        assert result.reentry_node == "logistics"
         assert result.rolled_back_state.confidence_score == 0.75
 
     @pytest.mark.asyncio
@@ -327,13 +325,13 @@ class TestMemoryAndRollback:
         bank = MemoryBank()
         engine = RollbackEngine(bank, max_rollbacks=2)
         state = make_state(make_request())
-        sid = state.hindsight_session_id
-        await bank.open_session(sid, state)
-        await bank.checkpoint(sid, state, "evidence")
+        session = await bank.open(state.dispute_id)
+        state.hindsight_session_id = session.session_id
+        await bank.checkpoint(session, state, "evidence")
 
-        await engine.auto_rollback(sid, state)
-        await engine.auto_rollback(sid, state)
-        result = await engine.auto_rollback(sid, state)
+        await auto_rollback(state, bank, "test")
+        await auto_rollback(state, bank, "test")
+        result = await auto_rollback(state, bank, "test")
         assert result.status == "LIMIT_EXCEEDED"
 
     @pytest.mark.asyncio
@@ -342,7 +340,8 @@ class TestMemoryAndRollback:
         engine = RollbackEngine(bank)
         state = make_state(make_request())
         # Never opened session
-        result = await engine.auto_rollback("nonexistent_session", state)
+        state.hindsight_session_id = "nonexistent_session"
+        result = await auto_rollback(state, bank, "test")
         assert result.status == "SESSION_NOT_FOUND"
 
 
@@ -356,7 +355,7 @@ class TestBudgetHarness:
     async def test_fresh_dispute_approves_heavy_model(self):
         harness = BudgetHarness()
         state = make_state(make_request())
-        result = await harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.06)
+        result = await harness.gate(state, model="llama-3.3-70b-versatile", task_label="test")
         assert result.approved is True
         assert result.model_to_use == "llama-3.3-70b-versatile"
 
@@ -364,7 +363,8 @@ class TestBudgetHarness:
     async def test_charge_tracks_correctly(self):
         harness = BudgetHarness()
         state = make_state(make_request())
-        await harness.charge(state, actual_cost=0.12, node="evidence_node")
+        d = await harness.gate(state, "llama-3.1-8b-instant", "test")
+        await harness.charge(state, d, 100, 20)
         assert abs(state.budget_status.consumed_inr - 0.12) < 0.001
 
     @pytest.mark.asyncio
@@ -373,7 +373,7 @@ class TestBudgetHarness:
         state = make_state(make_request())
         # Consume 72% of budget
         await harness.charge(state, actual_cost=3.60, node="evidence_node")
-        result = await harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.10)
+        result = await harness.gate(state, model="llama-3.3-70b-versatile", task_label="test")
         assert result.model_to_use == "llama-3.1-8b-instant", f"Expected downgrade, got {result.model_to_use}"
 
     @pytest.mark.asyncio
@@ -382,14 +382,14 @@ class TestBudgetHarness:
         state = make_state(make_request())
         await harness.charge(state, actual_cost=5.0, node="evidence_node")
         with pytest.raises(BudgetExhaustedError):
-            harness.gate(state, model="llama-3.1-8b-instant", estimated_cost=0.01)
+            await harness.gate(state, model="llama-3.1-8b-instant", task_label="test")
 
     @pytest.mark.asyncio
     async def test_warning_emitted_at_80_percent(self):
         harness = BudgetHarness()
         state = make_state(make_request())
         await harness.charge(state, actual_cost=4.10, node="evidence_node")  # 82%
-        harness.gate(state, model="llama-3.1-8b-instant", estimated_cost=0.01)
+        await harness.gate(state, model="llama-3.1-8b-instant", task_label="test")
         warning_events = [e for e in state.audit_trail if "BUDGET_WARNING" in str(e)]
         assert len(warning_events) >= 1
 
@@ -397,8 +397,9 @@ class TestBudgetHarness:
     async def test_consumed_never_exceeds_cap(self):
         harness = BudgetHarness()
         state = make_state(make_request())
-        await harness.charge(state, actual_cost=4.99, node="n1")
-        await harness.charge(state, actual_cost=0.50, node="n2")   # Would overspend
+        d = await harness.gate(state, "llama-3.1-8b-instant", "test")
+        await harness.charge(state, d, 4158, 831)
+        await harness.charge(state, d, 416, 83)   # Would overspend
         assert state.budget_status.consumed_inr <= 5.0 + 0.001  # Allow float tolerance
 
 
@@ -471,7 +472,8 @@ class TestEndToEnd:
         state = make_state(make_request("DAMAGED_ITEM", 500.0))
 
         # Exhaust budget during evidence phase
-        await harness.charge(state, actual_cost=5.0, node="evidence_node")
+        d = await harness.gate(state, "llama-3.1-8b-instant", "test")
+        await harness.charge(state, d, 4166000, 833000)
         assert state.budget_status.is_exhausted is True
 
         # Downstream negotiation should not be called — state machine escalates
@@ -485,16 +487,15 @@ class TestEndToEnd:
         bank = MemoryBank()
         engine = RollbackEngine(bank)
         state = make_state(make_request("REFUND_DENIED", 300.0))
-        sid = state.hindsight_session_id
-
-        await bank.open_session(sid, state)
+        session = await bank.open(state.dispute_id)
+        state.hindsight_session_id = session.session_id
         state.confidence_score = 0.70
-        await bank.checkpoint(sid, state, "evidence")
+        await bank.checkpoint(session, state, "evidence")
 
         # Simulate a bad state
         state.confidence_score = 0.10
-        result = await engine.auto_rollback(sid, state)
-        assert result.reentry_node == "evidence"
+        result = await auto_rollback(state, bank, "test")
+        assert result.reentry_node == "logistics"
         assert result.rolled_back_state.confidence_score == 0.70
 
 

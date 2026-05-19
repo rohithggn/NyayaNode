@@ -179,12 +179,21 @@ class _MockEvidenceClient:
         # Simulate async network latency
         await asyncio.sleep(random.uniform(0.05, 0.15))
 
-        items = [EvidenceItem(
-            type=e.get("type", "text"),
-            content=e.get("content", ""),
-            relevance_score=round(random.uniform(0.5, 1.0), 2),
-            analyzed=True,
-        ) for e in evidence_items]
+        items = []
+        for e in evidence_items:
+            if isinstance(e, dict):
+                items.append(EvidenceItem(
+                    type=e.get("type", "text"),
+                    content=e.get("content", ""),
+                    metadata={
+                        "relevance_score": round(random.uniform(0.5, 1.0), 2),
+                        "analyzed": True
+                    }
+                ))
+            else:
+                e.metadata["relevance_score"] = round(random.uniform(0.5, 1.0), 2)
+                e.metadata["analyzed"] = True
+                items.append(e)
 
         # If no evidence submitted → weak
         if not items:
