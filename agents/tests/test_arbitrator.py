@@ -353,20 +353,20 @@ class TestMemoryAndRollback:
 class TestBudgetHarness:
 
     def test_fresh_dispute_approves_heavy_model(self):
-        harness = BudgetHarness(budget_cap_inr=5.0)
+        harness = BudgetHarness()
         state = make_state(make_request())
         result = harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.06)
         assert result.approved is True
         assert result.model == "llama-3.3-70b-versatile"
 
     def test_charge_tracks_correctly(self):
-        harness = BudgetHarness(budget_cap_inr=5.0)
+        harness = BudgetHarness()
         state = make_state(make_request())
         harness.charge(state, actual_cost=0.12, node="evidence_node")
         assert abs(state.budget_status.consumed_inr - 0.12) < 0.001
 
     def test_downgrade_at_70_percent(self):
-        harness = BudgetHarness(budget_cap_inr=5.0)
+        harness = BudgetHarness()
         state = make_state(make_request())
         # Consume 72% of budget
         harness.charge(state, actual_cost=3.60, node="evidence_node")
@@ -374,14 +374,14 @@ class TestBudgetHarness:
         assert result.model == "llama-3.1-8b-instant", f"Expected downgrade, got {result.model}"
 
     def test_hard_block_when_exhausted(self):
-        harness = BudgetHarness(budget_cap_inr=5.0)
+        harness = BudgetHarness()
         state = make_state(make_request())
         harness.charge(state, actual_cost=5.0, node="evidence_node")
         with pytest.raises(BudgetExhaustedError):
             harness.gate(state, model="llama-3.1-8b-instant", estimated_cost=0.01)
 
     def test_warning_emitted_at_80_percent(self):
-        harness = BudgetHarness(budget_cap_inr=5.0)
+        harness = BudgetHarness()
         state = make_state(make_request())
         harness.charge(state, actual_cost=4.10, node="evidence_node")  # 82%
         harness.gate(state, model="llama-3.1-8b-instant", estimated_cost=0.01)
@@ -389,7 +389,7 @@ class TestBudgetHarness:
         assert len(warning_events) >= 1
 
     def test_consumed_never_exceeds_cap(self):
-        harness = BudgetHarness(budget_cap_inr=5.0)
+        harness = BudgetHarness()
         state = make_state(make_request())
         harness.charge(state, actual_cost=4.99, node="n1")
         harness.charge(state, actual_cost=0.50, node="n2")   # Would overspend
@@ -461,7 +461,7 @@ class TestEndToEnd:
     @pytest.mark.asyncio
     async def test_budget_exhaustion_mid_pipeline(self):
         """If budget is exhausted before negotiation, pipeline must escalate gracefully."""
-        harness = BudgetHarness(budget_cap_inr=5.0)
+        harness = BudgetHarness()
         state = make_state(make_request("DAMAGED_ITEM", 500.0))
 
         # Exhaust budget during evidence phase

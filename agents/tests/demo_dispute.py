@@ -200,7 +200,7 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
     bank   = MemoryBank()
     engine = RollbackEngine(bank)
     sm     = DisputeStateMachine(state)
-    harness = BudgetHarness(budget_cap_inr=5.0)
+    harness = BudgetHarness()
 
     await bank.open_session(session_id, state)
     sm.transition_to(DisputeStatus.EVIDENCE_COLLECTION)
