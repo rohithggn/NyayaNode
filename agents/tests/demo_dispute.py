@@ -202,7 +202,8 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
     sm     = DisputeStateMachine(state)
     harness = BudgetHarness()
 
-    await bank.open_session(session_id, state)
+    session = await bank.open(state.dispute_id)
+    state.hindsight_session_id = session.session_id
     sm.transition_to(DisputeStatus.EVIDENCE_COLLECTION)
     ok("Session opened in Hindsight memory")
     ok("State machine → EVIDENCE_COLLECTION")
@@ -228,7 +229,7 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
 
     state.evidence_sufficient = True
     state.confidence_score    = ev["confidence"]
-    await bank.checkpoint(session_id, state, "evidence")
+    await bank.checkpoint(session, state, "evidence")
     ok("Checkpoint saved to Hindsight")
 
     # ── Logistics correlation ──────────────────────────────────────────────────
@@ -247,7 +248,7 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
             warn(f"Anomaly: {anomaly}")
     field("Latency",           f"{elapsed:.2f}s")
 
-    await bank.checkpoint(session_id, state, "logistics")
+    await bank.checkpoint(session, state, "logistics")
     ok("Checkpoint saved to Hindsight")
 
     # ── Budget check before decision ───────────────────────────────────────────
@@ -290,7 +291,7 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
     field("Primary Fault",     lg["verdict"].replace("_AT_FAULT", ""))
 
     sm.transition_to(DisputeStatus.NEGOTIATION, skip_guards=True)
-    await bank.checkpoint(session_id, state, "decision")
+    await bank.checkpoint(session, state, "decision")
 
     # ── Negotiation ────────────────────────────────────────────────────────────
     step(7, "Seller Negotiation")
@@ -310,7 +311,7 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
 
     state.confidence_score = confidence
     sm.transition_to(DisputeStatus.RESOLVED, skip_guards=True)
-    await bank.checkpoint(session_id, state, "resolved")
+    await bank.checkpoint(session, state, "resolved")
 
     # ── Final verdict ──────────────────────────────────────────────────────────
     t_total = time.time() - t_start
