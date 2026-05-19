@@ -204,7 +204,7 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
 
     session = await bank.open(state.dispute_id)
     state.hindsight_session_id = session.session_id
-    sm.transition_to(DisputeStatus.EVIDENCE_COLLECTION)
+    sm.transition(DisputeStatus.EVIDENCE_COLLECTION)
     ok("Session opened in Hindsight memory")
     ok("State machine → EVIDENCE_COLLECTION")
 
@@ -253,13 +253,13 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
 
     # ── Budget check before decision ───────────────────────────────────────────
     step(5, "Budget Check")
-    snap = harness.snapshot(state)
+    snap = await harness.snapshot(state)
     field("Budget Cap",        f"₹{snap.budget_cap_inr:.2f}")
-    field("Consumed",          f"₹{snap.consumed_inr:.4f}  ({snap.percent_consumed:.1f}%)")
+    field("Consumed",          f"₹{snap.consumed_inr:.4f}  ({snap.pct_consumed*100:.1f}%)")
     field("Remaining",         f"₹{snap.remaining_inr:.4f}")
 
     try:
-        gate = harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.08)
+        gate = await harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.08)
         ok(f"LLM gate approved", gate.model)
     except BudgetExhaustedError as e:
         err(f"Budget exhausted: {e}")
@@ -290,7 +290,7 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
     field("Confidence",        f"{confidence:.0%}")
     field("Primary Fault",     lg["verdict"].replace("_AT_FAULT", ""))
 
-    sm.transition_to(DisputeStatus.NEGOTIATION, skip_guards=True)
+    sm.transition(DisputeStatus.NEGOTIATION, skip_guards=True)
     await bank.checkpoint(session, state, "decision")
 
     # ── Negotiation ────────────────────────────────────────────────────────────
@@ -310,7 +310,7 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
     info("Notes", ng["resolution_notes"])
 
     state.confidence_score = confidence
-    sm.transition_to(DisputeStatus.RESOLVED, skip_guards=True)
+    sm.transition(DisputeStatus.RESOLVED, skip_guards=True)
     await bank.checkpoint(session, state, "resolved")
 
     # ── Final verdict ──────────────────────────────────────────────────────────

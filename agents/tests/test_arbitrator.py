@@ -224,63 +224,63 @@ class TestStateMachine:
     def test_happy_path_pending_to_resolved(self):
         state = self._fresh_state()
         sm = DisputeStateMachine(state)
-        sm.transition_to(DisputeStatus.EVIDENCE_COLLECTION)
+        sm.transition(DisputeStatus.EVIDENCE_COLLECTION)
         state.evidence_sufficient = True
-        sm.transition_to(DisputeStatus.NEGOTIATION)
+        sm.transition(DisputeStatus.NEGOTIATION)
         state.confidence_score = 0.85
-        sm.transition_to(DisputeStatus.RESOLVED)
+        sm.transition(DisputeStatus.RESOLVED)
         assert state.status == DisputeStatus.RESOLVED
 
     def test_illegal_transition_raises(self):
         state = self._fresh_state()
         sm = DisputeStateMachine(state)
-        sm.transition_to(DisputeStatus.EVIDENCE_COLLECTION)
-        sm.transition_to(DisputeStatus.NEGOTIATION, skip_guards=True)
-        sm.transition_to(DisputeStatus.RESOLVED, skip_guards=True)
+        sm.transition(DisputeStatus.EVIDENCE_COLLECTION)
+        sm.transition(DisputeStatus.NEGOTIATION, skip_guards=True)
+        sm.transition(DisputeStatus.RESOLVED, skip_guards=True)
         with pytest.raises(DisputeTransitionError):
-            sm.transition_to(DisputeStatus.NEGOTIATION)
+            sm.transition(DisputeStatus.NEGOTIATION)
 
     def test_evidence_guard_blocks_negotiation(self):
         state = self._fresh_state()
         sm = DisputeStateMachine(state)
-        sm.transition_to(DisputeStatus.EVIDENCE_COLLECTION)
+        sm.transition(DisputeStatus.EVIDENCE_COLLECTION)
         state.evidence_sufficient = False
         with pytest.raises(Exception):
-            sm.transition_to(DisputeStatus.NEGOTIATION)
+            sm.transition(DisputeStatus.NEGOTIATION)
 
     def test_confidence_guard_blocks_resolved(self):
         state = self._fresh_state()
         sm = DisputeStateMachine(state)
-        sm.transition_to(DisputeStatus.EVIDENCE_COLLECTION)
-        sm.transition_to(DisputeStatus.NEGOTIATION, skip_guards=True)
+        sm.transition(DisputeStatus.EVIDENCE_COLLECTION)
+        sm.transition(DisputeStatus.NEGOTIATION, skip_guards=True)
         state.confidence_score = 0.45  # Below 0.70 minimum
         with pytest.raises(Exception):
-            sm.transition_to(DisputeStatus.RESOLVED)
+            sm.transition(DisputeStatus.RESOLVED)
 
     def test_amount_guard_blocks_resolved_above_50k(self):
         state = self._fresh_state(amount=75_000.0)
         sm = DisputeStateMachine(state)
-        sm.transition_to(DisputeStatus.EVIDENCE_COLLECTION)
-        sm.transition_to(DisputeStatus.NEGOTIATION, skip_guards=True)
+        sm.transition(DisputeStatus.EVIDENCE_COLLECTION)
+        sm.transition(DisputeStatus.NEGOTIATION, skip_guards=True)
         state.confidence_score = 0.90
         with pytest.raises(Exception):
-            sm.transition_to(DisputeStatus.RESOLVED)
+            sm.transition(DisputeStatus.RESOLVED)
 
     def test_force_escalate_from_any_state(self):
         for status in [DisputeStatus.EVIDENCE_COLLECTION, DisputeStatus.NEGOTIATION]:
             state = self._fresh_state()
             sm = DisputeStateMachine(state)
-            sm.transition_to(DisputeStatus.EVIDENCE_COLLECTION)
+            sm.transition(DisputeStatus.EVIDENCE_COLLECTION)
             if status == DisputeStatus.NEGOTIATION:
-                sm.transition_to(DisputeStatus.NEGOTIATION, skip_guards=True)
+                sm.transition(DisputeStatus.NEGOTIATION, skip_guards=True)
             sm.force_escalate("Test escalation")
             assert state.status == DisputeStatus.ESCALATED
 
     def test_rollback_rewinds_state(self):
         state = self._fresh_state()
         sm = DisputeStateMachine(state)
-        sm.transition_to(DisputeStatus.EVIDENCE_COLLECTION)
-        sm.transition_to(DisputeStatus.NEGOTIATION, skip_guards=True)
+        sm.transition(DisputeStatus.EVIDENCE_COLLECTION)
+        sm.transition(DisputeStatus.NEGOTIATION, skip_guards=True)
         sm.rollback()
         assert state.status == DisputeStatus.EVIDENCE_COLLECTION
 
@@ -352,47 +352,53 @@ class TestMemoryAndRollback:
 
 class TestBudgetHarness:
 
-    def test_fresh_dispute_approves_heavy_model(self):
+    @pytest.mark.asyncio
+    async def test_fresh_dispute_approves_heavy_model(self):
         harness = BudgetHarness()
         state = make_state(make_request())
-        result = harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.06)
+        result = await harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.06)
         assert result.approved is True
         assert result.model == "llama-3.3-70b-versatile"
 
-    def test_charge_tracks_correctly(self):
+    @pytest.mark.asyncio
+    async def test_charge_tracks_correctly(self):
         harness = BudgetHarness()
         state = make_state(make_request())
-        harness.charge(state, actual_cost=0.12, node="evidence_node")
+        await harness.charge(state, actual_cost=0.12, node="evidence_node")
         assert abs(state.budget_status.consumed_inr - 0.12) < 0.001
 
-    def test_downgrade_at_70_percent(self):
+    @pytest.mark.asyncio
+    async def test_downgrade_at_70_percent(self):
         harness = BudgetHarness()
         state = make_state(make_request())
         # Consume 72% of budget
-        harness.charge(state, actual_cost=3.60, node="evidence_node")
-        result = harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.10)
+        await harness.charge(state, actual_cost=3.60, node="evidence_node")
+        result = await harness.gate(state, model="llama-3.3-70b-versatile", estimated_cost=0.10)
         assert result.model == "llama-3.1-8b-instant", f"Expected downgrade, got {result.model}"
 
-    def test_hard_block_when_exhausted(self):
+    @pytest.mark.asyncio
+    async def test_hard_block_when_exhausted(self):
         harness = BudgetHarness()
         state = make_state(make_request())
-        harness.charge(state, actual_cost=5.0, node="evidence_node")
+        await harness.charge(state, actual_cost=5.0, node="evidence_node")
         with pytest.raises(BudgetExhaustedError):
             harness.gate(state, model="llama-3.1-8b-instant", estimated_cost=0.01)
 
-    def test_warning_emitted_at_80_percent(self):
+    @pytest.mark.asyncio
+    async def test_warning_emitted_at_80_percent(self):
         harness = BudgetHarness()
         state = make_state(make_request())
-        harness.charge(state, actual_cost=4.10, node="evidence_node")  # 82%
+        await harness.charge(state, actual_cost=4.10, node="evidence_node")  # 82%
         harness.gate(state, model="llama-3.1-8b-instant", estimated_cost=0.01)
         warning_events = [e for e in state.audit_trail if "BUDGET_WARNING" in str(e)]
         assert len(warning_events) >= 1
 
-    def test_consumed_never_exceeds_cap(self):
+    @pytest.mark.asyncio
+    async def test_consumed_never_exceeds_cap(self):
         harness = BudgetHarness()
         state = make_state(make_request())
-        harness.charge(state, actual_cost=4.99, node="n1")
-        harness.charge(state, actual_cost=0.50, node="n2")   # Would overspend
+        await harness.charge(state, actual_cost=4.99, node="n1")
+        await harness.charge(state, actual_cost=0.50, node="n2")   # Would overspend
         assert state.budget_status.consumed_inr <= 5.0 + 0.001  # Allow float tolerance
 
 
@@ -449,11 +455,11 @@ class TestEndToEnd:
         req = make_request("DAMAGED_ITEM", 75_000.0)
         state = make_state(req)
         sm = DisputeStateMachine(state)
-        sm.transition_to(DisputeStatus.EVIDENCE_COLLECTION)
-        sm.transition_to(DisputeStatus.NEGOTIATION, skip_guards=True)
+        sm.transition(DisputeStatus.EVIDENCE_COLLECTION)
+        sm.transition(DisputeStatus.NEGOTIATION, skip_guards=True)
         state.confidence_score = 0.90
         with pytest.raises(Exception):
-            sm.transition_to(DisputeStatus.RESOLVED)
+            sm.transition(DisputeStatus.RESOLVED)
         # Force escalate path
         sm.force_escalate("Amount exceeds ₹50,000 arbitration threshold")
         assert state.status == DisputeStatus.ESCALATED
@@ -465,7 +471,7 @@ class TestEndToEnd:
         state = make_state(make_request("DAMAGED_ITEM", 500.0))
 
         # Exhaust budget during evidence phase
-        harness.charge(state, actual_cost=5.0, node="evidence_node")
+        await harness.charge(state, actual_cost=5.0, node="evidence_node")
         assert state.budget_status.is_exhausted is True
 
         # Downstream negotiation should not be called — state machine escalates
