@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NyayaNode — Live Cost Dashboard</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 0 0 3rem;
+    }
+
+    /* ── Header ───────────────────────────────────────────────────── */
+    header {
+      background: linear-gradient(135deg, #1a1f2e 0%, #16213e 100%);
+      border-bottom: 1px solid #2d3748;
+      padding: 1.25rem 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+    header .logo {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: #63b3ed;
+      letter-spacing: -0.5px;
+    }
+    header .logo span { color: #f6ad55; }
+    header .subtitle {
+      font-size: 0.8rem;
+      color: #718096;
+      margin-top: 2px;
+    }
+    header .badge {
+      margin-left: auto;
+      background: #2d3748;
+      border: 1px solid #4a5568;
+      border-radius: 999px;
+      padding: 0.25rem 0.75rem;
+      font-size: 0.72rem;
+      color: #a0aec0;
+    }
+    header .badge .dot {
+      display: inline-block;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: #48bb78;
+      margin-right: 5px;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* ── Layout ───────────────────────────────────────────────────── */
+    main {
+      max-width: 1100px;
+      margin: 2rem auto;
+      padding: 0 1.5rem;
+      display: grid;
+      gap: 1.5rem;
+    }
+
+    /* ── Cards ────────────────────────────────────────────────────── */
+    .card {
+      background: #1a1f2e;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 1.5rem;
+    }
+    .card-title {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #718096;
+      margin-bottom: 1.1rem;
+    }
+
+    /* ── Two-column form row ──────────────────────────────────────── */
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 640px) { .form-row { grid-template-columns: 1fr; } }
+
+    /* ── Form controls ────────────────────────────────────────────── */
+    .field { display: flex; flex-direction: column; gap: 0.4rem; }
+    label  { font-size: 0.78rem; color: #a0aec0; }
+
+    input[type="text"],
+    input[type="number"] {
+      background: #0f1117;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 0.9rem;
+      padding: 0.55rem 0.85rem;
+      outline: none;
+      transition: border-color 0.15s;
+      width: 100%;
+    }
+    input:focus { border-color: #63b3ed; }
+
+    button {
+      margin-top: 1rem;
+      background: #2b6cb0;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      cursor: pointer;
+      font-size: 0.88rem;
+      font-weight: 600;
+      padding: 0.6rem 1.4rem;
+      transition: background 0.15s, transform 0.1s;
+    }
+    button:hover  { background: #3182ce; }
+    button:active { transform: scale(0.97); }
+    button.secondary {
+      background: #276749;
+    }
+    button.secondary:hover { background: #2f855a; }
+
+    /* ── Dispute selector ─────────────────────────────────────────── */
+    #active-dispute-bar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+    #active-dispute-bar label { font-size: 0.78rem; color: #a0aec0; white-space: nowrap; }
+    #dispute-selector {
+      background: #0f1117;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      color: #e2e8f0;
+      font-size: 0.88rem;
+      padding: 0.45rem 0.75rem;
+      outline: none;
+      flex: 1;
+      min-width: 180px;
+    }
+    #dispute-selector:focus { border-color: #63b3ed; }
+
+    /* ── Budget gauge ─────────────────────────────────────────────── */
+    .gauge-wrap {
+      margin-top: 0.5rem;
+    }
+    .gauge-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.78rem;
+      color: #a0aec0;
+      margin-bottom: 0.4rem;
+    }
+    .gauge-track {
+      background: #2d3748;
+      border-radius: 999px;
+      height: 14px;
+      overflow: hidden;
+    }
+    .gauge-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.5s ease, background 0.5s ease;
+      background: #48bb78;
+    }
+    .gauge-fill.amber { background: #ed8936; }
+    .gauge-fill.red   { background: #fc8181; }
+
+    /* ── Summary stat cards ───────────────────────────────────────── */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+    }
+    @media (max-width: 700px) { .stats-grid { grid-template-columns: 1fr 1fr; } }
+
+    .stat-card {
+      background: #0f1117;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #63b3ed;
+      line-height: 1.1;
+    }
+    .stat-label {
+      font-size: 0.72rem;
+      color: #718096;
+      margin-top: 0.3rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+
+    /* ── Call log table ───────────────────────────────────────────── */
+    .table-wrap { overflow-x: auto; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.83rem;
+    }
+    thead th {
+      background: #0f1117;
+      color: #718096;
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.07em;
+      padding: 0.6rem 0.9rem;
+      text-align: left;
+      text-transform: uppercase;
+      border-bottom: 1px solid #2d3748;
+    }
+    tbody tr { border-bottom: 1px solid #1e2535; transition: background 0.1s; }
+    tbody tr:hover { background: #1e2535; }
+    tbody td { padding: 0.65rem 0.9rem; color: #cbd5e0; vertical-align: middle; }
+
+    .badge-tier {
+      border-radius: 999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+      text-transform: uppercase;
+    }
+    .tier-cheap   { background: #1c4532; color: #68d391; }
+    .tier-mid     { background: #2a4365; color: #90cdf4; }
+    .tier-premium { background: #44337a; color: #d6bcfa; }
+
+    .badge-downgrade {
+      background: #742a2a;
+      border-radius: 999px;
+      color: #fc8181;
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 0.2rem 0.6rem;
+    }
+    .badge-ok {
+      color: #4a5568;
+      font-size: 0.78rem;
+    }
+
+    /* ── Toast notifications ──────────────────────────────────────── */
+    #toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #2d3748;
+      border: 1px solid #4a5568;
+      border-radius: 10px;
+      color: #e2e8f0;
+      font-size: 0.85rem;
+      max-width: 320px;
+      opacity: 0;
+      padding: 0.75rem 1.1rem;
+      pointer-events: none;
+      transition: opacity 0.3s;
+      z-index: 999;
+    }
+    #toast.show { opacity: 1; }
+    #toast.error { border-color: #fc8181; color: #fc8181; }
+
+    /* ── Empty state ──────────────────────────────────────────────── */
+    .empty {
+      color: #4a5568;
+      font-size: 0.85rem;
+      padding: 1.5rem 0;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────────────────── -->
+<header>
+  <div>
+    <div class="logo">Nyaya<span>Node</span></div>
+    <div class="subtitle">ONDC AI Dispute Arbitration — LLMOps Dashboard</div>
+  </div>
+  <div class="badge"><span class="dot"></span>Live</div>
+</header>
+
+<main>
+
+  <!-- ── Start dispute ─────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Start New Dispute</div>
+    <div class="form-row">
+      <div class="field">
+        <label for="start-id">Dispute ID</label>
+        <input type="text" id="start-id" placeholder="e.g. ONDC-2025-BLR-441" />
+      </div>
+      <div class="field">
+        <label for="start-budget">Max Budget (₹)</label>
+        <input type="number" id="start-budget" value="5.00" min="0.01" step="0.01" />
+      </div>
+    </div>
+    <button onclick="startDispute()">Start Dispute</button>
+  </div>
+
+  <!-- ── Run step ──────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Run Pipeline Step</div>
+    <div class="form-row">
+      <div class="field">
+        <label for="step-id">Dispute ID</label>
+        <input type="text" id="step-id" placeholder="e.g. ONDC-2025-BLR-441" />
+      </div>
+      <div class="field">
+        <label for="step-prompt">Prompt</label>
+        <input type="text" id="step-prompt" placeholder="e.g. fetch tracking status for order ORD-001" />
+      </div>
+    </div>
+    <button class="secondary" onclick="runStep()">Run Step</button>
+  </div>
+
+  <!-- ── Live stats ────────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Live Dispute Stats</div>
+
+    <div id="active-dispute-bar">
+      <label for="dispute-selector">Watching:</label>
+      <select id="dispute-selector" onchange="onDisputeSelect()">
+        <option value="">— select a dispute —</option>
+      </select>
+    </div>
+
+    <!-- Budget gauge -->
+    <div class="gauge-wrap" style="margin-top:1.25rem;">
+      <div class="gauge-labels">
+        <span id="gauge-spent">₹0.000000 spent</span>
+        <span id="gauge-max">of ₹5.00</span>
+      </div>
+      <div class="gauge-track">
+        <div class="gauge-fill" id="gauge-fill" style="width:0%"></div>
+      </div>
+    </div>
+
+    <!-- Summary stats -->
+    <div class="stats-grid" style="margin-top:1.25rem;">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-spent">—</div>
+        <div class="stat-label">Total Spent (₹)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-remaining">—</div>
+        <div class="stat-label">Budget Remaining (₹)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-steps">—</div>
+        <div class="stat-label">Total Steps</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-downgrades">—</div>
+        <div class="stat-label">Downgrades</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Call log table ────────────────────────────────────────────── -->
+  <div class="card">
+    <div class="card-title">Model Switch Log</div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Step</th>
+            <th>Task Type</th>
+            <th>Model</th>
+            <th>Tier</th>
+            <th>Cost (₹)</th>
+            <th>Tokens In / Out</th>
+            <th>Downgraded</th>
+          </tr>
+        </thead>
+        <tbody id="call-log-body">
+          <tr><td colspan="7" class="empty">No steps yet — start a dispute and run a step.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- ── Toast ─────────────────────────────────────────────────────────── -->
+<div id="toast"></div>
+
+<script>
+  /* ── State ──────────────────────────────────────────────────────── */
+  let activeDisputeId = null;
+  let refreshTimer    = null;
+
+  /* ── Toast helper ───────────────────────────────────────────────── */
+  function showToast(msg, isError = false) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className   = 'show' + (isError ? ' error' : '');
+    clearTimeout(el._timer);
+    el._timer = setTimeout(() => { el.className = ''; }, 3500);
+  }
+
+  /* ── Start dispute ──────────────────────────────────────────────── */
+  async function startDispute() {
+    const disputeId = document.getElementById('start-id').value.trim();
+    const maxBudget = parseFloat(document.getElementById('start-budget').value) || 5.0;
+
+    if (!disputeId) { showToast('Please enter a Dispute ID.', true); return; }
+
+    try {
+      const res  = await fetch('/dispute/start', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ dispute_id: disputeId, max_budget: maxBudget }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) { showToast(data.error || 'Failed to start dispute.', true); return; }
+
+      showToast(`Dispute "${disputeId}" started.`);
+      addSelectorOption(disputeId);
+      setActiveDispute(disputeId);
+      document.getElementById('step-id').value = disputeId;
+    } catch (e) {
+      showToast('Network error: ' + e.message, true);
+    }
+  }
+
+  /* ── Run step ───────────────────────────────────────────────────── */
+  async function runStep() {
+    const disputeId = document.getElementById('step-id').value.trim();
+    const prompt    = document.getElementById('step-prompt').value.trim();
+
+    if (!disputeId || !prompt) {
+      showToast('Dispute ID and prompt are both required.', true);
+      return;
+    }
+
+    try {
+      const res  = await fetch('/dispute/step', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ dispute_id: disputeId, prompt }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) { showToast(data.error || 'Step failed.', true); return; }
+
+      const warn = data.downgraded ? ' ⚠ Model downgraded!' : '';
+      showToast(`Step ${data.step} complete — ${data.model} (${data.tier})${warn}`);
+
+      // Switch the live view to this dispute
+      if (activeDisputeId !== disputeId) {
+        addSelectorOption(disputeId);
+        setActiveDispute(disputeId);
+      }
+      refreshStats();
+    } catch (e) {
+      showToast('Network error: ' + e.message, true);
+    }
+  }
+
+  /* ── Selector helpers ───────────────────────────────────────────── */
+  function addSelectorOption(disputeId) {
+    const sel = document.getElementById('dispute-selector');
+    if ([...sel.options].some(o => o.value === disputeId)) return;
+    const opt   = document.createElement('option');
+    opt.value   = disputeId;
+    opt.text    = disputeId;
+    sel.appendChild(opt);
+  }
+
+  function onDisputeSelect() {
+    const val = document.getElementById('dispute-selector').value;
+    if (val) setActiveDispute(val);
+  }
+
+  function setActiveDispute(disputeId) {
+    activeDisputeId = disputeId;
+    document.getElementById('dispute-selector').value = disputeId;
+    refreshStats();
+    clearInterval(refreshTimer);
+    refreshTimer = setInterval(refreshStats, 2000);
+  }
+
+  /* ── Refresh stats ──────────────────────────────────────────────── */
+  async function refreshStats() {
+    if (!activeDisputeId) return;
+
+    try {
+      const res  = await fetch(`/dispute/cost/${encodeURIComponent(activeDisputeId)}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      renderStats(data);
+    } catch (_) { /* silent — server may not be ready */ }
+  }
+
+  /* ── Render stats ───────────────────────────────────────────────── */
+  function renderStats(report) {
+    const maxBudget = (report.total_cost + report.budget_remaining);
+    const pct       = maxBudget > 0 ? (report.total_cost / maxBudget) * 100 : 0;
+
+    // Gauge
+    const fill = document.getElementById('gauge-fill');
+    fill.style.width = Math.min(pct, 100) + '%';
+    fill.className   = 'gauge-fill' +
+      (pct > 85 ? ' red' : pct > 60 ? ' amber' : '');
+
+    document.getElementById('gauge-spent').textContent =
+      `₹${report.total_cost.toFixed(6)} spent`;
+    document.getElementById('gauge-max').textContent =
+      `of ₹${maxBudget.toFixed(2)}`;
+
+    // Stat cards
+    document.getElementById('stat-spent').textContent      = `₹${report.total_cost.toFixed(4)}`;
+    document.getElementById('stat-remaining').textContent  = `₹${report.budget_remaining.toFixed(4)}`;
+    document.getElementById('stat-steps').textContent      = report.total_steps;
+    document.getElementById('stat-downgrades').textContent = report.downgrades;
+
+    // Call log table
+    const tbody = document.getElementById('call-log-body');
+    if (!report.call_log || report.call_log.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" class="empty">No steps yet.</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = report.call_log.map(entry => {
+      const tierClass = `tier-${entry.tier}`;
+      const downBadge = entry.downgraded
+        ? '<span class="badge-downgrade">⚠ Yes</span>'
+        : '<span class="badge-ok">—</span>';
+      return `
+        <tr>
+          <td>${entry.step}</td>
+          <td>${entry.task_type.replace(/_/g, ' ')}</td>
+          <td>${entry.model}</td>
+          <td><span class="badge-tier ${tierClass}">${entry.tier}</span></td>
+          <td>₹${entry.cost.toFixed(6)}</td>
+          <td>${entry.input_tokens} / ${entry.output_tokens}</td>
+          <td>${downBadge}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  /* ── Bootstrap: load all active disputes on page load ──────────── */
+  (async function init() {
+    try {
+      const res  = await fetch('/dispute/all');
+      const data = await res.json();
+      (data.disputes || []).forEach(d => addSelectorOption(d.dispute_id));
+      if (data.disputes && data.disputes.length > 0) {
+        setActiveDispute(data.disputes[0].dispute_id);
+      }
+    } catch (_) { /* server not ready yet */ }
+  })();
+</script>
+
+</body>
+</html>
