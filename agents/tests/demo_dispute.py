@@ -177,8 +177,8 @@ async def run_demo(scenario_key: str, live_mode: bool = False):
         dispute_amount_inr=scenario["amount"],
     )
 
-    state = ArbitrationState(dispute_request=request)
-    state.session_id = session_id
+    state = ArbitrationState(dispute_id=request.dispute_id, request=request)
+    state.hindsight_session_id = session_id
 
     step(1, "Dispute Intake")
     field("Session ID",      session_id[:16] + "...")

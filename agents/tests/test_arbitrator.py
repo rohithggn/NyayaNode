@@ -73,8 +73,8 @@ def make_request(
 
 
 def make_state(request: DisputeRequest) -> ArbitrationState:
-    state = ArbitrationState(dispute_request=request)
-    state.session_id = str(uuid.uuid4())
+    state = ArbitrationState(dispute_id=request.dispute_id, request=request)
+    state.hindsight_session_id = str(uuid.uuid4())
     return state
 
 
@@ -295,7 +295,7 @@ class TestMemoryAndRollback:
     async def test_checkpoint_and_retrieve(self):
         bank = MemoryBank()
         state = make_state(make_request())
-        session_id = state.session_id
+        session_id = state.hindsight_session_id
 
         await bank.open_session(session_id, state)
         state.confidence_score = 0.82
@@ -310,7 +310,7 @@ class TestMemoryAndRollback:
         bank = MemoryBank()
         engine = RollbackEngine(bank)
         state = make_state(make_request())
-        sid = state.session_id
+        sid = state.hindsight_session_id
 
         await bank.open_session(sid, state)
         state.confidence_score = 0.75
@@ -327,7 +327,7 @@ class TestMemoryAndRollback:
         bank = MemoryBank()
         engine = RollbackEngine(bank, max_rollbacks=2)
         state = make_state(make_request())
-        sid = state.session_id
+        sid = state.hindsight_session_id
         await bank.open_session(sid, state)
         await bank.checkpoint(sid, state, "evidence")
 
@@ -412,18 +412,18 @@ class TestEndToEnd:
         state = make_state(req)
 
         ev = await collect_and_analyse_evidence(
-            state.session_id, "DAMAGED_ITEM",
+            state.hindsight_session_id, "DAMAGED_ITEM",
             req.evidence, req.dispute_amount_inr
         )
         assert ev["evidence_sufficient"] is True
 
         lg = await correlate_logistics(
-            state.session_id, req.order_id, req.logistics_id, "DAMAGED_ITEM"
+            state.hindsight_session_id, req.order_id, req.logistics_id, "DAMAGED_ITEM"
         )
         assert lg["lsp_liability_score"] >= 0.70
 
         ng = await run_negotiation(
-            state.session_id, "DAMAGED_ITEM",
+            state.hindsight_session_id, "DAMAGED_ITEM",
             req.dispute_amount_inr * ev["confidence"],
             "FULL_REFUND", ev["confidence"]
         )
@@ -436,10 +436,10 @@ class TestEndToEnd:
         state = make_state(req)
 
         ev = await collect_and_analyse_evidence(
-            state.session_id, "NOT_DELIVERED", req.evidence, req.dispute_amount_inr
+            state.hindsight_session_id, "NOT_DELIVERED", req.evidence, req.dispute_amount_inr
         )
         lg = await correlate_logistics(
-            state.session_id, req.order_id, req.logistics_id, "NOT_DELIVERED"
+            state.hindsight_session_id, req.order_id, req.logistics_id, "NOT_DELIVERED"
         )
         assert len(lg["anomalies"]) > 0   # GPS mismatch must be flagged
 
@@ -479,7 +479,7 @@ class TestEndToEnd:
         bank = MemoryBank()
         engine = RollbackEngine(bank)
         state = make_state(make_request("REFUND_DENIED", 300.0))
-        sid = state.session_id
+        sid = state.hindsight_session_id
 
         await bank.open_session(sid, state)
         state.confidence_score = 0.70
