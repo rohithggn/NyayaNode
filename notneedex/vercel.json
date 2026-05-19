@@ -1,0 +1,26 @@
+{
+  "version": 2,
+  "framework": "nextjs",
+  "buildCommand": "cd frontend && npm run build",
+  "outputDirectory": "frontend/.next",
+  "installCommand": "cd frontend && npm install",
+  "routes": [
+    {
+      "src": "/api/agents/(.*)",
+      "dest": "https://nyayanode-agents.railway.app/agents/$1"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "https://nyayanode-backend.railway.app/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/$1"
+    }
+  ],
+  "env": {
+    "NEXT_PUBLIC_API_BASE_URL": "@api_base_url",
+    "NEXT_PUBLIC_SUPABASE_URL": "@supabase_url",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "@supabase_anon_key"
+  }
+}
