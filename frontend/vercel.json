@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/agents/:path*",
+      "destination": "https://nyayanode-agents.railway.app/agents/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "https://nyayanode-backend.railway.app/:path*"
+    }
+  ]
+}
