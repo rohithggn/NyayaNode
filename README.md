@@ -1,5 +1,7 @@
 # NyayaNode — Decentralized AI Dispute Arbitration for ONDC
 
+**website has been hosted in: link-https://nyaya-node-epra.vercel.app/**
+
 > Micro-arbitrator AI agents that resolve buyer-seller disputes on India's Open Network for Digital Commerce (ONDC) in real-time, within a ₹5 inference budget per case.
 
 ## Team
